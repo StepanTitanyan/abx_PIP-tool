@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "abx"
+version = "0.0.1"
+description = "Correct-by-default A/B testing toolkit (conversion first)"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+
+# Optional but recommended. Fill these in when you’re ready.
+# authors = [{ name = "Your Name", email = "you@example.com" }]
+
+dependencies = [
+  "pandas>=2.0",
+  "numpy>=1.24",
+]
+
+keywords = [
+  "ab-testing",
+  "experiment",
+  "conversion",
+  "statistics",
+  "analytics",
+  "cli",
+  "pandas",
+]
+
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers/Analysts",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+# Replace these with your real links (PyPI shows them on the project page)
+Homepage = "https://github.com/YOUR_GH_USER/abx"
+Repository = "https://github.com/YOUR_GH_USER/abx"
+Issues = "https://github.com/YOUR_GH_USER/abx/issues"
+Documentation = "https://github.com/YOUR_GH_USER/abx/tree/main/docs"
+
+[project.optional-dependencies]
+# Parquet read/write in pandas typically needs an engine; pyarrow is the usual default.
+parquet = [
+  "pyarrow>=14",
+]
+
+dev = [
+  "pytest>=7",
+  "ruff>=0.6",
+  "mypy>=1.7",
+  "build>=1.2",
+  "twine>=5.0",
+]
+
+[project.scripts]
+ab = "abx.cli.main:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Optional: good defaults for linting/formatting if you use ruff
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["abx"]
