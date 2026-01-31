@@ -1,6 +1,6 @@
 # Data contract
 
-This document defines the **input expectations** and the **cleaning guarantees** provided by `abx convert`.
+This document defines the **input expectations** and the **cleaning guarantees** provided by `ab convert`.
 
 It is intended to be strict enough for reliable pipelines, but practical enough for real messy datasets.
 
@@ -10,8 +10,8 @@ It is intended to be strict enough for reliable pipelines, but practical enough 
 
 This contract applies to:
 
-- `abx convert unit`
-- `abx convert events`
+- `ab convert unit`
+- `ab convert events`
 
 It covers:
 - supported file types,
@@ -33,22 +33,22 @@ It covers:
 - `.csv`
 - `.parquet` / `.pq`
 
-If an input/output file type is not supported, `abx` stops with an error.
+If an input/output file type is not supported, `ab` stops with an error.
 
 ---
 
 ## Column naming and selection
 
-`abx` does **not** require specific column names in your raw data.
-Instead, you point `abx` to the correct columns using CLI flags like `--user`, `--variant`, `--time`, etc.
+`ab` does **not** require specific column names in your raw data.
+Instead, you point `ab` to the correct columns using CLI flags like `--user`, `--variant`, `--time`, etc.
 
 Example:
 
 ```bash
-abx convert events --user uid --variant grp --time timestamp --event action ...
+ab convert events --user uid --variant grp --time timestamp --event action ...
 ```
 
-`abx` validates that the chosen column names exist in the input dataset before proceeding.
+`ab` validates that the chosen column names exist in the input dataset before proceeding.
 
 ---
 
@@ -69,7 +69,7 @@ All columns referenced by these flags must exist in the input dataset.
 ### Input expectations
 - **User column**: should identify a user/unit. Can be string or numeric; it will be coerced to string.
 - **Variant column**: should be a categorical label. It will be coerced to string.
-- **Outcome column**: can be numeric or categorical depending on your use case. `abx` currently copies it as-is after string cleaning logic in the implementation (see note below).
+- **Outcome column**: can be numeric or categorical depending on your use case. `ab` currently copies it as-is after string cleaning logic in the implementation (see note below).
 
 > Note: The current implementation lowercases the `outcome` column in `convert unit` by converting to string and applying `.str.lower()`.
 > For many A/B datasets, outcomes are numeric. If your outcomes are numeric, you should ensure they remain numeric (or adjust implementation).
@@ -112,7 +112,7 @@ All referenced columns must exist in input data.
 - **Variant column**: categorical label; coerced to string and normalized.
 - **Time column**: parseable timestamp values (string, datetime, numeric epoch-like supported by pandas inference). Unparseable rows are dropped.
 - **Event column**: categorical event name/type; coerced to string and normalized.
-- **Value column (optional)**: numeric-ish values; `abx` attempts to coerce to float (see below).
+- **Value column (optional)**: numeric-ish values; `ab` attempts to coerce to float (see below).
 
 ### Cleaning guarantees (events)
 
@@ -157,7 +157,7 @@ If provided:
 
 A/B analysis assumes a user belongs to one variant.
 
-`abx` checks if a user has multiple variants in the event log:
+`ab` checks if a user has multiple variants in the event log:
 
 - If `--multivariant error` (default): stops and prints example users
 - Otherwise, it forces a single variant per user based on the chosen strategy:
@@ -203,9 +203,9 @@ For each user:
 
 ---
 
-## What `abx` does *not* guarantee
+## What `ab` does *not* guarantee
 
-You may need additional validation outside `abx` for:
+You may need additional validation outside `ab` for:
 
 - strict numeric validity (e.g., forbid NaNs in value column)
 - outlier handling and winsorization
@@ -215,7 +215,7 @@ You may need additional validation outside `abx` for:
 - bot filtering / internal traffic removal
 - missingness rules (e.g., require that every user has an outcome)
 
-Roadmap item: a dedicated validator command (`abx doctor`) is a natural next step.
+A dedicated validator command exists: use `ab doctor` to run integrity/missingness/metric checks before analysis.
 
 ---
 
@@ -228,7 +228,7 @@ Columns:
 
 Run:
 ```bash
-abx convert unit --user uid --variant treatment --outcome revenue --keep country --preview
+ab convert unit --user uid --variant treatment --outcome revenue --keep country --preview
 ```
 
 ### Event-level dataset example (conceptual)
@@ -238,7 +238,7 @@ Columns:
 
 Run:
 ```bash
-abx convert events   --user user_id --variant variant --time ts --event event --value amount   --metric conversion=binary:event_exists(purchase)   --metric revenue=continuous:sum_value(purchase)   --preview
+ab convert events   --user user_id --variant variant --time ts --event event --value amount   --metric conversion=binary:event_exists(purchase)   --metric revenue=continuous:sum_value(purchase)   --preview
 ```
 
 ---

@@ -1,6 +1,6 @@
-# Contributing to abx
+# Contributing to ab
 
-Thanks for your interest in contributing to **abx**! This document explains how to set up the project locally, how to propose changes, and the standards we follow.
+Thanks for your interest in contributing to **ab**! This document explains how to set up the project locally, how to propose changes, and the standards we follow.
 
 ---
 
@@ -41,6 +41,7 @@ abx/
 
   docs/
     convert.md
+    doctor.md
     config.md
     data-contract.md
     troubleshooting.md
@@ -80,6 +81,11 @@ Optional (recommended for Parquet support):
 python -m pip install pyarrow
 ```
 
+Optional (currently required for `ab doctor --check allocation` in this version):
+```bash
+python -m pip install scipy
+```
+
 ---
 
 ## Running the CLI locally
@@ -87,16 +93,16 @@ python -m pip install pyarrow
 Once installed editable:
 
 ```bash
-abx --help
-abx convert --help
-abx convert unit --help
-abx convert events --help
+ab --help
+ab convert --help
+ab convert unit --help
+ab convert events --help
 ```
 
 If you don’t have a console script entrypoint yet, you can also run the module form (depending on packaging):
 
 ```bash
-python -m abx --help
+python -m ab --help
 ```
 
 ---
@@ -106,8 +112,8 @@ python -m abx --help
 ### Minimal sanity checks (manual)
 Before submitting changes, please run:
 
-- `abx convert unit --preview` on a small unit dataset
-- `abx convert events --preview` on a small events dataset
+- `ab convert unit --preview` on a small unit dataset
+- `ab convert events --preview` on a small events dataset
 - at least one value-based metric (`--value` + `sum_value`)
 - at least one exposure-anchored run (`--exposure` + `--window`)
 

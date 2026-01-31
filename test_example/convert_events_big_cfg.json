@@ -1,0 +1,27 @@
+{
+  "version": false,
+  "cmd": "convert",
+  "convert_cmd": "events",
+  "data": "events_5000_messy.csv",
+  "user": "user_id",
+  "variant": "exp_group",
+  "time": "timestamp",
+  "event": "event_name",
+  "value": "amount",
+  "exposure": "experiment_exposed",
+  "multiexposure": "error",
+  "unassigned": "error",
+  "multivariant": "error",
+  "window": "14d",
+  "metric": [
+    "conversion=binary:event_exists(purchase)",
+    "purchases=count:count_event(purchase)",
+    "revenue=continuous:sum_value(purchase)",
+    "refunds=count:count_event(refund)",
+    "refund_amount=continuous:sum_value(refund)",
+    "clicks=count:count_event(click)",
+    "views=count:count_event(page_view)"
+  ],
+  "out": "converted_5000.csv",
+  "preview": false
+}

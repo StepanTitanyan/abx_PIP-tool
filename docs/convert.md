@@ -1,6 +1,6 @@
-# Conversion (`abx convert`)
+# Conversion (`ab convert`)
 
-This document is the **single source of truth** for the `abx convert` command family:
+This document is the **single source of truth** for the `ab convert` command family:
 - deep conversion logic,
 - every supported CLI attribute/flag,
 - the metric DSL (formerly `metrics.md`),
@@ -14,12 +14,12 @@ This document is the **single source of truth** for the `abx convert` command fa
 ## Table of contents
 
 - [Overview](#overview)
-- [`abx convert unit`](#abx-convert-unit)
+- [`ab convert unit`](#abx-convert-unit)
   - [Arguments](#arguments-unit)
   - [Conversion steps](#conversion-steps-unit)
   - [Duplicates](#duplicates-unit)
   - [Examples](#examples-unit)
-- [`abx convert events`](#abx-convert-events)
+- [`ab convert events`](#abx-convert-events)
   - [Arguments](#arguments-events)
   - [Core concepts](#core-concepts)
   - [Conversion steps](#conversion-steps-events)
@@ -42,20 +42,20 @@ This document is the **single source of truth** for the `abx convert` command fa
 
 ## Overview
 
-`abx` supports two input shapes:
+`ab` supports two input shapes:
 
-1. **Unit-level** (`abx convert unit`)
+1. **Unit-level** (`ab convert unit`)
    - Input: already one row per user (or *intended* to be)
    - Output: selects + renames columns into a canonical schema
 
-2. **Event-level** (`abx convert events`)
+2. **Event-level** (`ab convert events`)
    - Input: one row per event
    - Output: aggregates events into user-level metrics using a repeatable metric DSL (`--metric`)
    - Optional: exposure anchoring (`--exposure`) and post-exposure windows (`--window`)
 
 ---
 
-## `abx convert unit`
+## `ab convert unit`
 
 ### Purpose
 
@@ -123,18 +123,18 @@ A “duplicate user” means the output table contains multiple rows with the sa
 Preview:
 
 ```bash
-abx convert unit   --data data/unit.csv   --user user_id   --variant group   --outcome conversion   --preview
+ab convert unit   --data data/unit.csv   --user user_id   --variant group   --outcome conversion   --preview
 ```
 
 Keep columns + dedupe:
 
 ```bash
-abx convert unit   --data data/unit.csv   --user uid   --variant treatment   --outcome revenue   --keep country,device   --dedupe last   --out out/unit.parquet
+ab convert unit   --data data/unit.csv   --user uid   --variant treatment   --outcome revenue   --keep country,device   --dedupe last   --out out/unit.parquet
 ```
 
 ---
 
-## `abx convert events`
+## `ab convert events`
 
 ### Purpose
 
@@ -177,6 +177,7 @@ Optional:
 - `--exposure VALUE` — value in the event column identifying exposure (users without exposure are dropped)
 - `--window DURATION` — outcome window after exposure (e.g., `7d`, `24h`, `30m`) **(used only with exposure)**
 - `--multiexposure {error,first,last}` — how to handle multiple exposures per user (default: `first`)
+- `--unassigned {error,drop,keep}` — what to do if a user ends up with an empty variant after cleaning (default: `error`)
 - `--multivariant {error,first,last,mode,from_exposure}` — how to handle multiple variants per user (default: `error`)
 - `--preview` — print `head(30)` and exit
 - `--out PATH` — output `.csv` or `.parquet`
@@ -244,7 +245,7 @@ If the input contains multiple variants per user, behavior depends on `--multiva
 
 ## Variant consistency
 
-If any user has more than one variant label in the input, `abx` detects it.
+If any user has more than one variant label in the input, `ab` detects it.
 
 `--multivariant` strategies:
 - `error` (default): stop and show example users
@@ -367,22 +368,24 @@ Returns time from `exposure_time` to the first occurrence of `EVENT` within `df_
 
 ### Examples (metrics)
 
+> **PowerShell tip:** always quote the whole metric string, e.g. `--metric "conversion=binary:event_exists(purchase)"`. Unquoted parentheses can be interpreted by the shell and cause confusing errors.
+
 Basic conversion + binary and counts:
 
 ```bash
-abx convert events   --data data/events.csv   --user user_id   --variant variant   --time ts   --event event   --metric conversion=binary:event_exists(purchase)   --metric n_purchases=count:count_event(purchase)   --preview
+ab convert events   --data data/events.csv   --user user_id   --variant variant   --time ts   --event event   --metric conversion=binary:event_exists(purchase)   --metric n_purchases=count:count_event(purchase)   --preview
 ```
 
 Value-based metrics:
 
 ```bash
-abx convert events   --data data/events.csv   --user user_id   --variant variant   --time ts   --event event   --value amount   --metric revenue=continuous:sum_value(purchase)   --metric aov=continuous:mean_value(purchase)   --metric max_order=continuous:max_value(purchase)   --out out/metrics.parquet
+ab convert events   --data data/events.csv   --user user_id   --variant variant   --time ts   --event event   --value amount   --metric revenue=continuous:sum_value(purchase)   --metric aov=continuous:mean_value(purchase)   --metric max_order=continuous:max_value(purchase)   --out out/metrics.parquet
 ```
 
 Exposure-anchored + window + time-to-event:
 
 ```bash
-abx convert events   --data data/events.csv   --user user_id   --variant variant   --time ts   --event event   --exposure exposure   --window 7d   --metric conversion=binary:event_exists(purchase)   --metric ttp_hours=time:time_to_event(purchase, unit=h)   --out out/post_exposure.csv
+ab convert events   --data data/events.csv   --user user_id   --variant variant   --time ts   --event event   --exposure exposure   --window 7d   --metric conversion=binary:event_exists(purchase)   --metric ttp_hours=time:time_to_event(purchase, unit=h)   --out out/post_exposure.csv
 ```
 
 ### Edge cases (metrics)

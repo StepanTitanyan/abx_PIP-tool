@@ -66,6 +66,7 @@ dev = [
 
 [project.scripts]
 ab = "abx.cli.main:main"
+abx = "abx.cli.main:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

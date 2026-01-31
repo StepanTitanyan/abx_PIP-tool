@@ -3,7 +3,7 @@ from abx.cli.convert_cmd import add_convert_subcommand
 from abx.cli.doctor_cmd import add_doctor_subcommand
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="ab", formatter_class=argparse.RawTextHelpFormatter)
+    parser = argparse.ArgumentParser(prog="abx", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("--version", action="store_true", help="Print version and exit")
 
     subparsers = parser.add_subparsers(dest="cmd")

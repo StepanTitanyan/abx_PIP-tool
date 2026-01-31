@@ -2,43 +2,36 @@
 
 All notable changes to **abx** will be documented in this file.
 
-This project follows the spirit of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and adheres to Semantic Versioning when releases begin.
+This project follows the spirit of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Releases will follow Semantic Versioning **after the first public release**.
+
+> This project is **not released yet**. Everything lives under **[Unreleased]**.
 
 ---
 
 ## [Unreleased]
 
 ### Added
-- `abx convert unit`: convert unit-level datasets into canonical schema (`user_id`, `variant`, `outcome`).
-- `abx convert events`: convert event-level logs into user-level metrics.
+- `ab convert unit`: convert unit-level datasets into canonical schema (`user_id`, `variant`, `outcome`) with optional `--keep`.
+- `ab convert events`: convert event-level logs into user-level metrics using repeatable `--metric`.
 - Preview mode (`--preview`) that prints `head(30)` without writing output.
 - Output writing to `.csv` and `.parquet` / `.pq` via `--out`.
 - JSON config support:
   - `--save-config` to persist effective args into a JSON config file
   - `--config` to load config values (fills missing CLI args)
-- Exposure anchoring for event-level conversion via `--exposure`.
-- Outcome windows after exposure via `--window` (parsed as a pandas duration).
-- Multiple exposure handling via `--multiexposure` (`error`, `first`, `last`).
-- Multiple variant handling via `--multivariant` (`error`, `first`, `last`, `mode`, `from_exposure`).
-- Metric DSL (`--metric`, repeatable) supporting:
-  - `binary:event_exists(EVENT)`
-  - `count:count_event(EVENT)`
-  - `continuous:sum_value(EVENT)` *(requires `--value`)*
-  - `continuous:mean_value(EVENT)` *(requires `--value`)*
-  - `continuous:max_value(EVENT)` *(requires `--value`)*
-  - `time:first_time(EVENT)`
-  - `time:time_to_event(EVENT, unit=s|m|h|d)` *(requires `--exposure`)*
+- Exposure anchoring for event-level conversion via `--exposure` + `--window`.
+- Multi-row resolution flags:
+  - `--dedupe error|first|last` (unit-level)
+  - `--multiexposure error|first|last` (events)
+  - `--multivariant error|first|last|mode|from_exposure` (events)
+  - `--unassigned error|drop|keep` (events)
+- `ab doctor`: validate converted user-level datasets (integrity, variants, missingness, metric sanity, distribution, allocation/SRM-style).
 
 ### Changed
-- N/A (initial development)
+- Docs and examples use the installed CLI name `ab` (package name remains `abx`).
 
 ### Fixed
-- N/A (initial development)
-
-### Removed
-- N/A (initial development)
-
----
+- PowerShell usage docs: quote metric specs that contain parentheses.
 
 ## Release notes template (future)
 

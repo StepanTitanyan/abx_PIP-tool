@@ -12,27 +12,33 @@ It’s built for the common real-world situation where your data is **messy**:
 
 `abx` makes those cases explicit and controllable via CLI flags, with predictable outputs and clear errors.
 
+> **CLI name:** the installed command is **`ab`** (package name is `abx`).
+
 ---
 
 ## What you get
 
-### 1) `convert unit` — unit-level → canonical unit-level  
+### 1) `convert unit` — unit-level → canonical unit-level
 Input: one row per user (already aggregated)  
 Output: one row per user, renamed to the canonical schema:
 
 - `user_id`
-- `variant` *(lowercased)*
-- `outcome` *(as provided)*
+- `variant` *(lowercased & trimmed)*
+- `outcome` *(as provided; numeric stays numeric)*
 - optional kept columns via `--keep`
 
-### 2) `convert events` — event log → canonical user-level metrics  
+### 2) `convert events` — event log → canonical user-level metrics
 Input: one row per event  
 Output: one row per user with:
 
 - `user_id`
-- `variant` *(lowercased)*
+- `variant` *(lowercased & trimmed)*
 - optional exposure anchoring: `exposure_time`, `window_end`
 - one output column per metric defined via `--metric` (repeatable)
+
+### 3) `doctor` — validate a converted dataset before analysis
+Input: already-converted user-level data (`convert unit` / `convert events`)  
+Output: a readiness report (console + optional `.md` / `.json`) across integrity, missingness, metric sanity, and more.
 
 ---
 
@@ -57,7 +63,7 @@ pip install -e .
 Preview (prints `head(30)`):
 
 ```bash
-abx convert unit \
+ab convert unit \
   --data data/unit.csv \
   --user user_id \
   --variant exp_group \
@@ -68,7 +74,7 @@ abx convert unit \
 Write output:
 
 ```bash
-abx convert unit \
+ab convert unit \
   --data data/unit.csv \
   --user user_id \
   --variant exp_group \
@@ -79,7 +85,7 @@ abx convert unit \
 Keep extra columns:
 
 ```bash
-abx convert unit \
+ab convert unit \
   --data data/unit.csv \
   --user user_id \
   --variant exp_group \
@@ -91,7 +97,7 @@ abx convert unit \
 Resolve duplicate users (multiple rows per user):
 
 ```bash
-abx convert unit \
+ab convert unit \
   --data data/unit.csv \
   --user user_id \
   --variant exp_group \
@@ -107,46 +113,48 @@ abx convert unit \
 Compute basic metrics (repeat `--metric` to add more columns):
 
 ```bash
-abx convert events \
+ab convert events \
   --data data/events.csv \
   --user user_id \
   --variant exp_group \
   --time timestamp \
   --event event_name \
-  --metric conversion=binary:event_exists(purchase) \
-  --metric n_purchases=count:count_event(purchase) \
+  --metric "conversion=binary:event_exists(purchase)" \
+  --metric "n_purchases=count:count_event(purchase)" \
   --preview
 ```
 
 Value-based metrics (requires `--value`):
 
 ```bash
-abx convert events \
+ab convert events \
   --data data/events.csv \
   --user user_id \
   --variant exp_group \
   --time timestamp \
   --event event_name \
   --value amount \
-  --metric revenue=continuous:sum_value(purchase) \
-  --metric aov=continuous:mean_value(purchase) \
+  --metric "revenue=continuous:sum_value(purchase)" \
+  --metric "aov=continuous:mean_value(purchase)" \
   --out out/user_metrics.parquet
 ```
 
-Exposure-anchored outcomes (drop users without an exposure event):
+Exposure-anchored outcomes (scope metrics **after exposure** and **within a window**):
 
 ```bash
-abx convert events \
+ab convert events \
   --data data/events.csv \
   --user user_id \
   --variant exp_group \
   --time timestamp \
   --event event_name \
-  --exposure experiment_expose \
+  --exposure experiment_exposed \
   --window 7d \
   --multiexposure first \
-  --metric conversion=binary:event_exists(purchase) \
-  --metric ttp_hours=time:time_to_event(purchase, unit=h) \
+  --multivariant from_exposure \
+  --unassigned error \
+  --metric "conversion=binary:event_exists(purchase)" \
+  --metric "ttp_hours=time:time_to_event(purchase, unit=h)" \
   --out out/after_exposure.csv
 ```
 
@@ -154,6 +162,22 @@ abx convert events \
 > ```powershell
 > --metric "conversion=binary:event_exists(purchase)"
 > ```
+
+---
+
+## Doctor (readiness check)
+
+Run doctor on a converted file:
+
+```bash
+ab doctor --data out/after_exposure.csv
+```
+
+Generate a Markdown report:
+
+```bash
+ab doctor --data out/after_exposure.csv --report reports/doctor.md
+```
 
 ---
 
@@ -184,11 +208,11 @@ Full spec, edge cases, and rule list: **`docs/metrics.md`**
 Save a working CLI run into a JSON config:
 
 ```bash
-abx convert events \
+ab convert events \
   --data data/events.csv \
   --user user_id --variant exp_group --time timestamp --event event_name \
-  --exposure experiment_expose --window 7d \
-  --metric conversion=binary:event_exists(purchase) \
+  --exposure experiment_exposed --window 7d \
+  --metric "conversion=binary:event_exists(purchase)" \
   --save-config configs/after_exposure.json \
   --preview
 ```
@@ -196,7 +220,7 @@ abx convert events \
 Re-run later on another file:
 
 ```bash
-abx convert events \
+ab convert events \
   --config configs/after_exposure.json \
   --data data/events_new.csv \
   --out out/after_exposure_new.csv
@@ -232,6 +256,7 @@ Full contract: **`docs/data-contract.md`**
 - **Missing columns** → fails fast with a list of missing + available columns
 - **Multiple exposures per user** → `--multiexposure error|first|last`
 - **Multiple variants per user** → `--multivariant error|first|last|mode|from_exposure`
+- **Users with no variant after cleaning** → `--unassigned error|drop|keep`
 - **Bad metric spec** → explicit parser errors showing which `--metric` is malformed
 - **PowerShell interpreting parentheses** → quote `--metric "..."`
 
@@ -239,33 +264,22 @@ More: **`docs/troubleshooting.md`**
 
 ---
 
-## Project structure
+## Project docs
 
-Recommended layout (for the repo):
-
-```
-abx/
-  src/abx/...
-  docs/
-    convert.md
-    metrics.md
-    config.md
-    data-contract.md
-    troubleshooting.md
-  README.md
-  LICENSE
-  CHANGELOG.md
-  CONTRIBUTING.md
-  SECURITY.md
-```
+- `docs/convert.md` — conversion commands
+- `docs/doctor.md` — dataset readiness checks
+- `docs/metrics.md` — metric DSL reference
+- `docs/config.md` — config save/load
+- `docs/data-contract.md` — what inputs/outputs guarantee
+- `docs/troubleshooting.md` — common issues
 
 ---
 
-## Roadmap (next)
+## Roadmap (later)
 
+- `ab analyse` (built-in A/B analysis on converted tables)
 - richer metric rules (funnels, unique counts, rolling windows)
 - better ergonomics for event parameters and value columns
-- more built-in validations and summaries
 
 ---
 

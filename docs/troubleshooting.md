@@ -1,6 +1,6 @@
 # Troubleshooting
 
-This guide covers the most common issues when running `abx` on real datasets—especially on Windows/PowerShell—and how to fix them quickly.
+This guide covers the most common issues when running `ab` on real datasets—especially on Windows/PowerShell—and how to fix them quickly.
 
 ---
 
@@ -23,7 +23,7 @@ This guide covers the most common issues when running `abx` on real datasets—e
 ## CLI basics
 
 ### “Command not found: abx”
-**Cause:** `abx` is not installed in the active Python environment.
+**Cause:** `ab` is not installed in the active Python environment.
 
 **Fix:**
 ```bash
@@ -36,7 +36,7 @@ python -m pip install -e .
 
 Verify:
 ```bash
-abx --help
+ab --help
 ```
 
 ### “I ran it but nothing was written”
@@ -44,7 +44,7 @@ Most likely you used `--preview` (which intentionally does not write output).
 
 Use `--out` to write:
 ```bash
-abx convert unit ... --out out/result.csv
+ab convert unit ... --out out/result.csv
 ```
 
 ---
@@ -59,7 +59,7 @@ In PowerShell, the Bash-style `\` line continuation does **not** work the same w
 Or use PowerShell backticks:
 
 ```powershell
-abx convert events `
+ab convert events `
   --data data\events.csv `
   --user user_id `
   --variant variant `
@@ -69,7 +69,18 @@ abx convert events `
   --preview
 ```
 
-### Quoting parentheses in `--metric`
+### Quoting metric specs in `--metric`
+In PowerShell, unquoted strings containing parentheses can be parsed in surprising ways. In some cases an unquoted metric like:
+
+`--metric conversion=binary:event_exists(purchase)`
+
+can lead to errors where `purchase` looks like a command.
+
+**Fix:** quote the entire metric string:
+
+```powershell
+--metric "conversion=binary:event_exists(purchase)"
+```
 Parentheses are usually fine, but if you see parsing issues, quote the metric:
 
 ```powershell
@@ -95,7 +106,7 @@ Common causes:
 Fix:
 - Use absolute paths or quote paths:
 ```bash
-abx convert unit --data "C:\Users\me\Desktop\unit.csv" ...
+ab convert unit --data "C:\Users\me\Desktop\unit.csv" ...
 ```
 
 - Verify current directory:
@@ -105,7 +116,7 @@ pwd
 (PowerShell: `Get-Location`)
 
 ### “Unsupported file type”
-`abx` supports only:
+`ab` supports only:
 - `.csv`
 - `.parquet` / `.pq`
 
@@ -121,7 +132,7 @@ Possible causes:
 - quoting issues
 - encoding issues
 
-Current `abx` uses `pandas.read_csv` defaults.
+Current `ab` uses `pandas.read_csv` defaults.
 If your CSV uses `;`, you may need to pre-convert or update your loader to accept `--sep` in future versions.
 
 Quick pre-convert in Python:
@@ -165,7 +176,7 @@ s = pd.to_datetime(df["ts"], errors="coerce", utc=True)
 print(s.isna().mean())
 ```
 
-If your timestamps are epoch seconds/milliseconds, you may need to convert before using `abx`:
+If your timestamps are epoch seconds/milliseconds, you may need to convert before using `ab`:
 ```python
 df["ts"] = pd.to_datetime(df["ts"], unit="s", utc=True)  # or unit="ms"
 ```
@@ -183,13 +194,13 @@ Fix:
 ```
 
 ### Values contain currency symbols (e.g., `$12.50`, `AMD 5000`)
-`abx` strips non-numeric characters and parses float.
+`ab` strips non-numeric characters and parses float.
 This is usually fine, but some edge cases exist:
 - commas as decimal separators (e.g., `12,5`) may parse incorrectly
 - thousands separators may parse incorrectly
 
 Recommendation:
-- preprocess the value column into a clean numeric column before running `abx` if your locale formatting is complex.
+- preprocess the value column into a clean numeric column before running `ab` if your locale formatting is complex.
 
 ---
 
@@ -253,6 +264,19 @@ Fix:
 ### “Unsupported metric...”
 Only the documented metric rules are supported.
 See `docs/convert.md` for the authoritative list.
+
+---
+
+## Doctor / environment pitfalls
+
+### `ModuleNotFoundError: No module named 'scipy'`
+Current versions of `ab doctor` import SciPy for allocation (SRM-style) p-values. Install it:
+
+```bash
+python -m pip install scipy
+```
+
+(If/when SciPy becomes optional, this section will be updated.)
 
 ---
 

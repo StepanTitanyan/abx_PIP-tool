@@ -1,6 +1,8 @@
 # Config files (`--config`, `--save-config`)
 
-`abx` supports saving and loading command arguments via JSON config files.
+`ab` supports saving and loading command arguments via JSON config files.
+
+> Note: config loading only fills arguments whose current value is `None`. Flags like `--preview` (default `False`) will **not** be turned on by a config; pass them on the CLI each run.
 This makes conversions reproducible and easy to rerun across datasets and environments.
 
 ---
@@ -27,7 +29,7 @@ Configs solve three practical problems:
 Example: event conversion with revenue metric
 
 ```bash
-abx convert events   --data data/events.csv   --user user_id   --variant variant   --time ts   --event event   --value amount   --metric revenue=continuous:sum_value(purchase)   --metric conversion=binary:event_exists(purchase)   --save-config configs/events_revenue.json   --preview
+ab convert events   --data data/events.csv   --user user_id   --variant variant   --time ts   --event event   --value amount   --metric revenue=continuous:sum_value(purchase)   --metric conversion=binary:event_exists(purchase)   --save-config configs/events_revenue.json   --preview
 ```
 
 This writes a JSON config at `configs/events_revenue.json`.
@@ -35,7 +37,7 @@ This writes a JSON config at `configs/events_revenue.json`.
 ### Reuse a config
 
 ```bash
-abx convert events   --config configs/events_revenue.json   --out out/revenue.csv
+ab convert events   --config configs/events_revenue.json   --out out/revenue.csv
 ```
 
 > Tip: If your config includes `--data`, you don’t need to pass `--data` again.
@@ -45,13 +47,14 @@ abx convert events   --config configs/events_revenue.json   --out out/revenue.cs
 
 ## What gets saved
 
-When you run with `--save-config PATH`, `abx` writes “effective arguments” to JSON:
+When you run with `--save-config PATH`, `ab` writes “effective arguments” to JSON:
 
-- Includes only CLI fields that are relevant to conversion
 - Excludes internal argparse values (like the `func` callback)
 - Excludes `save_config` itself
 - Excludes `config` (to avoid config files referencing themselves)
-- Drops keys whose value is `None` (to keep configs clean)
+- Drops keys whose value is `None`
+
+Implementation detail: boolean flags like `preview` may be saved as `false`; that is fine, but remember configs won’t turn `--preview` on because loading only fills `None` values.
 
 **Example output (illustrative):**
 ```json
@@ -78,7 +81,7 @@ When you run with `--save-config PATH`, `abx` writes “effective arguments” t
 
 ## Loading behavior (current implementation)
 
-When you pass `--config PATH`, `abx`:
+When you pass `--config PATH`, `ab`:
 
 1. reads the JSON file into a dict,
 2. for each key in the config:
@@ -121,7 +124,7 @@ You can manually edit the JSON and remove `"data": ...` so you always pass it in
 Example:
 
 ```bash
-abx convert events   --config configs/template_events.json   --data data/events_new.csv   --out out/new.csv
+ab convert events   --config configs/template_events.json   --data data/events_new.csv   --out out/new.csv
 ```
 
 Since CLI provides `--data`, config will not fill it anyway (it’s already non-None).
@@ -146,7 +149,7 @@ Configs can safely be committed to Git, as long as they don’t contain secrets 
 
 ## Validation and failure modes
 
-When loading a config, `abx` will fail fast if:
+When loading a config, `ab` will fail fast if:
 - the config file does not exist
 - JSON is invalid (parse error)
 

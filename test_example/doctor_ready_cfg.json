@@ -1,0 +1,16 @@
+{
+  "version": false,
+  "cmd": "doctor",
+  "data": "converted_5000.csv",
+  "user": "user_id",
+  "variant": "variant",
+  "metrics": "conversion,purchases,revenue,refunds,refund_amount,clicks,views",
+  "alpha": 0.01,
+  "min_n": 100,
+  "only": "all",
+  "fail_on": "warn",
+  "no_exit": false,
+  "preview": true,
+  "report": "doctor_ready_report.md",
+  "check": "integrity,variants,missingness,metrics,consistency"
+}
