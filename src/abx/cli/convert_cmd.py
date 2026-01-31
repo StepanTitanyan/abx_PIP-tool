@@ -5,7 +5,7 @@ import json
 
 
 def add_convert_subcommand(subparsers: argparse._SubParsersAction) -> None:
-    convert_parser = subparsers.add_parser( "convert", help="Convert data to canonical user-level format")
+    convert_parser = subparsers.add_parser( "convert", help="| Convert data to canonical user-level format")
     convert_subparsers = convert_parser.add_subparsers(dest="convert_cmd", required=True)
 
     #ab convert unit
@@ -23,18 +23,19 @@ def add_convert_subcommand(subparsers: argparse._SubParsersAction) -> None:
     unit_parser.set_defaults(func=_run_unit)
 
     #ab convert event
-    events_parser = convert_subparsers.add_parser("events", help="Manual conversion for event-level data (one row per event)")
+    events_parser = convert_subparsers.add_parser("events", help="| Manual conversion for event-level data (one row per event)")
     events_parser.add_argument("--data", metavar = "PATH", default=None, help="| Path to CSV or Parquet file")
     events_parser.add_argument("--user", metavar = "COL", default=None, help="| User/unit id column name")
     events_parser.add_argument("--variant", metavar = "COL", default=None, help="| Treatment/variant column name")
     events_parser.add_argument("--time", metavar = "COL", default=None, help="| Event timestamp column name")
     events_parser.add_argument("--event", metavar = "COL", default=None, help="| Event type/category column name")
     events_parser.add_argument("--value", metavar = "COL", default=None, help="| Event numeric value column name (like purchase amount)")
-    events_parser.add_argument("--exposure", metavar = "VALUE", default=None, help="| Value in Event type column identifying exposure. Users without exposure are dropped.")
+    events_parser.add_argument("--exposure", metavar = "VALUE", default=None, help="| Value in Event type column identifying exposure. Users without exposure are dropped")
     events_parser.add_argument("--multiexposure", choices=["error", "first", "last"], default=None, help="| A fallback if there are multiple exposure event per user (default: first)")
+    events_parser.add_argument("--unassigned", choices=["error", "drop", "keep"], default=None, help="| What to do if a user has no assigned variant after conversion (default: error)")
     events_parser.add_argument("--multivariant", choices=["error", "first", "last", "mode", "from_exposure"], default=None, help="| A fallback if there are multiple variants per user (default: error)")
-    events_parser.add_argument("--window", metavar = "DURATION", default=None, help="| Outcome window after exposure (e.g., 7d, 24h). Only used when exposure-event is provided.")
-    events_parser.add_argument("--metric", metavar="SPEC", action="append", default=None, help="| Metric spec (repeatable). Used for column computations. Define one output column per metric. ---Syntax: NAME=TYPE:RULE(EVENT[, key=value ...])")
+    events_parser.add_argument("--window", metavar = "DURATION", default=None, help="| Outcome window after exposure (e.g., 7d, 24h). Only used when exposure-event is provided")
+    events_parser.add_argument("--metric", metavar="SPEC", action="append", default=None, help="| Metric spec (repeatable). Used for column computations. Define one output column per metric ---Syntax: NAME=TYPE:RULE(EVENT[, key=value ...])")
     events_parser.add_argument("--out", metavar="PATH", help="| Output path (.csv or .parquet) (either --preview or --out)")
     events_parser.add_argument("--preview", action="store_true", help="| Preview converted data without outputing (either --preview or --out)")
     events_parser.add_argument("--save-config", metavar="PATH", default=None, help="| Write merged arguments to a JSON config file (optional, should end in .json)")
@@ -183,7 +184,6 @@ def _run_unit(args: argparse.Namespace) -> None:
         args.keep = ""
     if args.dedupe is None:
         args.dedupe = "error"
-
     if args.preview and args.out:
         raise SystemExit("Use either --preview or --out, not both.")
     if not args.preview and not args.out:
@@ -194,9 +194,7 @@ def _run_unit(args: argparse.Namespace) -> None:
     missing = [k for k in required_args if not getattr(args, k)]
     if missing:
         raise SystemExit(
-            f"Missing required arguments: {missing}\n"
-            f"Provide them on CLI or via --config."
-        )
+            f"Missing required arguments: {missing}. Provide them on CLI or via --config.")
 
     #Save config if needed
     if args.save_config:
@@ -212,16 +210,32 @@ def _run_unit(args: argparse.Namespace) -> None:
     keep_cols = _parse_keep(args.keep)
     required_cols = [args.user, args.variant, args.outcome] + keep_cols
     _require_columns(df, required_cols)
-    #Clean columns
+
+    #Clean user + variant
     df[args.user] = df[args.user].astype("string").str.strip()
     df[args.variant] = df[args.variant].astype("string").str.strip().str.lower()
-    df[args.outcome] = df[args.outcome].astype("string").str.strip().str.lower()
 
-    #Select + rename into canonical schema
+    #Outcome: keep numeric if numeric; otherwise clean gently and attempt numeric parse
+    s_out = df[args.outcome]
+    if pd.api.types.is_numeric_dtype(s_out):
+        #Keep numeric as-is
+        pass
+    else:
+        s = s_out.astype("string").str.strip()
+        s_num = pd.to_numeric(s, errors="coerce")
+        non_missing = s.notna().sum()
+        numeric_rate = (s_num.notna().sum() / non_missing) if non_missing else 0.0
+
+        if numeric_rate >= 0.95:
+            df[args.outcome] = s_num
+        else:
+            df[args.outcome] = s
+
+    #Select + rename into canonical df
     out = df[required_cols].copy()
     out = out.rename(columns={args.user: "user_id", args.variant: "variant", args.outcome: "outcome"})
 
-    #Handle duplicates (multiple rows per user)
+    #Handle duplicates
     dup_mask = out["user_id"].duplicated(keep=False)
     if dup_mask.any():
         n_dup_rows = int(dup_mask.sum())
@@ -254,7 +268,7 @@ def _run_unit(args: argparse.Namespace) -> None:
 #------------------------------------------------------------------------------------------
 
 def _run_events(args: argparse.Namespace) -> None:
-    #Load config first (so it can fill args.user/variant/outcome/etc)
+    #Load config first (to fill args.user/variant/etc)
     if args.config:
         print("Reading specified config file......")
         cfg = _load_config(Path(args.config))
@@ -267,6 +281,8 @@ def _run_events(args: argparse.Namespace) -> None:
         args.multiexposure = "first"
     if args.multivariant is None:
         args.multivariant = "error"
+    if args.unassigned is None:
+        args.unassigned = "error"
 
     if args.exposure:
         after_exposure = True
@@ -288,9 +304,7 @@ def _run_events(args: argparse.Namespace) -> None:
     missing = [k for k in required_args if not getattr(args, k)]
     if missing:
         raise SystemExit(
-            f"Missing required arguments: {missing}\n"
-            f"Provide them on CLI or via --config."
-        )
+            f"Missing required arguments: {missing}. Provide them on CLI or via --config.")
     
     if not args.metric:
         raise SystemExit("Provide at least one --metric. Example: --metric conversion=binary:event_exists(purchase)")
@@ -423,7 +437,6 @@ def _run_events(args: argparse.Namespace) -> None:
     
     #Deconstruct atributes and compute metrics
     metrics = _deconstruct_metric(args.metric)
-    metrics = _deconstruct_metric(args.metric)
 
     for _, (m_name, m_type, m_rule, m_event, m_kwargs) in metrics.items():
         target = m_event.strip().lower()
@@ -523,6 +536,22 @@ def _run_events(args: argparse.Namespace) -> None:
                 "| continuous:max_value(event)\n"
                 "| time:first_time(event)\n"
                 "| time:time_to_event(event, unit=s|m|h|d)   (requires --exposure)\n")
+
+    #Unassigned handling
+    v = users_tbl["variant"].astype("string")
+    bad = v.isna() | (v.str.strip() == "")
+    if bad.any():
+        n_bad = int(bad.sum())
+
+        if args.unassigned == "error":
+            ex = users_tbl.loc[bad, ["user_id", "variant"]].head(30)
+            raise SystemExit(f"[Stopped] Unassigned users: {n_bad}. Use --unassigned drop to remove them, or fix upstream assignment. Examples:\n{ex.to_string(index=False)}")
+
+        if args.unassigned == "drop":
+            users_tbl = users_tbl.loc[~bad].copy()
+            print(f"[Unassigned] dropped: {n_bad}")
+
+        #keep -> do nothing
 
 
     print("=== Converted (events) ===")

@@ -1,0 +1,164 @@
+{
+  "INTEGRITY_BAD_USER": {
+    "title": "Missing/empty user_id",
+    "what": "Some rows have a missing or empty user identifier.",
+    "why": "Canonical data must have exactly one valid user_id per row. Missing ids break grouping, deduping, and analysis.",
+    "fix": "Fix conversion: strip user column, drop empty ids, or ensure user id exists upstream."
+  },
+  "INTEGRITY_BAD_VARIANT": {
+    "title": "Missing/empty variant",
+    "what": "Some rows have a missing or empty variant value.",
+    "why": "A/B/n analysis requires an assigned variant for each user. Missing variants cause silent bias or dropped users.",
+    "fix": "Fix conversion: clean variant values; or use --unassigned drop/keep depending on your policy."
+  },
+  "INTEGRITY_DUP_USER": {
+    "title": "Duplicate user rows",
+    "what": "Multiple rows exist for the same user_id in canonical data.",
+    "why": "Canonical format must be one row per user. Duplicates inflate counts and distort metrics.",
+    "fix": "Fix convert step: use --dedupe for unit; for events ensure aggregation outputs one row per user."
+  },
+  "INTEGRITY_SUMMARY": {
+    "title": "Dataset summary",
+    "what": "Basic dataset size summary.",
+    "why": "Quick sanity check that the file has expected number of rows/users.",
+    "fix": "None needed; use it to confirm input/output look reasonable."
+  },
+
+  "VARIANT_COUNTS": {
+    "title": "Variant counts",
+    "what": "Number of users per variant.",
+    "why": "Helps spot tiny arms, imbalance, or missing assignment.",
+    "fix": "If unexpected: check assignment logic, exposure join, or filtering in conversion."
+  },
+  "VARIANT_SINGLE_ARM": {
+    "title": "Only one variant detected",
+    "what": "All users are in the same variant (or only one non-null variant exists).",
+    "why": "This may not be a real experiment. You cannot compare treatment effects with one arm.",
+    "fix": "Check variant assignment, filters, and whether your dataset actually includes multiple arms."
+  },
+  "VARIANT_TINY_ARM": {
+    "title": "Very small variant arm",
+    "what": "One or more variants have too few users.",
+    "why": "Small arms lead to unstable results and low statistical power.",
+    "fix": "Collect more data, adjust experiment allocation, or remove tiny arms if they are accidental."
+  },
+
+  "METRIC_ALL_MISSING": {
+    "title": "Metric is all missing",
+    "what": "A metric column is entirely NaN (no values).",
+    "why": "This metric is unusable for analysis. Usually means wrong event name or broken conversion step.",
+    "fix": "Check metric DSL event name, window/exposure scoping, and whether events exist in input."
+  },
+  "METRIC_HIGH_MISSING": {
+    "title": "Metric has high missingness",
+    "what": "A metric is missing for most users.",
+    "why": "High missingness reduces power and may bias results if missingness differs by variant.",
+    "fix": "Confirm expected behavior; if not expected, check event tracking or conversion logic."
+  },
+  "METRIC_MISSING_IMBALANCE": {
+    "title": "Missingness differs across variants",
+    "what": "Missing rate is different between variants.",
+    "why": "This is a common sign of tracking/pipeline bias. It can invalidate the experiment.",
+    "fix": "Check that events are tracked equally across variants; inspect scoping/join logic in convert."
+  },
+  "MISSINGNESS_SUMMARY": {
+    "title": "Missingness summary table",
+    "what": "Overview of missing rates per metric and imbalance gaps.",
+    "why": "Lets you quickly see which metrics are broken or biased.",
+    "fix": "Use it to decide where to debug first."
+  },
+
+  "METRIC_NON_NUMERIC_DTYPE": {
+    "title": "Metric is non-numeric dtype",
+    "what": "Metric column is stored as object/string instead of numeric.",
+    "why": "Most A/B tests require numeric metrics (counts, revenue, etc). Strings break analysis or get coerced wrong.",
+    "fix": "Fix conversion parsing. For events, ensure value column is cleaned and converted to numeric."
+  },
+  "METRIC_BAD_NUMERIC_CAST": {
+    "title": "Metric contains many non-numeric values",
+    "what": "Many values fail conversion to number (e.g., '$12', 'N/A', 'ten').",
+    "why": "This often indicates parsing issues and will distort metrics (many values become NaN).",
+    "fix": "Improve parsing in convert: strip symbols, normalize decimal separators, handle blanks consistently."
+  },
+  "METRIC_NONFINITE": {
+    "title": "Metric contains inf/-inf",
+    "what": "Metric has infinite values.",
+    "why": "Most analysis and summaries break or become meaningless with infinities.",
+    "fix": "Check division-by-zero pipelines, parsing bugs, or replace invalid values before analysis."
+  },
+  "METRIC_CONSTANT": {
+    "title": "Metric has no variation",
+    "what": "Metric is constant across users.",
+    "why": "A constant metric cannot show a treatment effect (no signal). Usually means wrong metric definition.",
+    "fix": "Check event name in metric DSL, scope/window, and ensure events exist."
+  },
+  "METRIC_BAD_BINARY_VALUES": {
+    "title": "Binary metric has values other than 0/1",
+    "what": "A metric that looks binary contains values besides 0 and 1.",
+    "why": "Binary tests assume 0/1. Other values often mean conversion logic is wrong.",
+    "fix": "Ensure binary metrics are created as int 0/1 and not counts or strings."
+  },
+  "METRICS_SUMMARY": {
+    "title": "Metrics quality summary",
+    "what": "Overview of dtype, missingness, cast failures, and constant metrics.",
+    "why": "Helps you quickly identify broken metric columns.",
+    "fix": "Use it to debug the highest-risk metrics first."
+  },
+
+  "VARIANT_NEEDS_CLEANING": {
+    "title": "Variant needs normalization",
+    "what": "Variant values differ by whitespace/case (e.g., 'A', ' a ', 'A ').",
+    "why": "This causes variant splitting mistakes (A and ' a ' become different arms).",
+    "fix": "Normalize in convert: strip + lower. Ensure CRM/export doesn't introduce spaces."
+  },
+  "VARIANT_SUSPICIOUS_VALUES": {
+    "title": "Variant has placeholder values",
+    "what": "Variant contains values like none/null/nan/undefined.",
+    "why": "Usually means assignment failed or rows were not properly joined to a variant.",
+    "fix": "Fix assignment logic; consider --unassigned drop to avoid analyzing unknown arms."
+  },
+  "USER_BAD_VALUES": {
+    "title": "User id invalid",
+    "what": "User column has missing/empty values.",
+    "why": "Invalid user ids break canonical assumptions and cause duplicates / wrong grouping.",
+    "fix": "Strip + drop empty ids in convert, or fix upstream identifiers."
+  },
+  "USER_NEEDS_CLEANING": {
+    "title": "User id needs normalization",
+    "what": "User ids contain whitespace that changes equality.",
+    "why": "Two ids that look same can group differently ('u1' vs ' u1 ').",
+    "fix": "Normalize user ids in convert: astype('string').str.strip()."
+  },
+
+  "METRIC_OUTLIERS": {
+    "title": "Metric has outliers",
+    "what": "Metric has extreme values based on IQR rule.",
+    "why": "Outliers can dominate averages and distort A/B conclusions, or indicate parsing bugs.",
+    "fix": "Check parsing first. If real: consider robust stats, winsorization, or log transforms in analysis."
+  },
+  "DISTRIBUTION_SUMMARY": {
+    "title": "Distribution summary",
+    "what": "Per-variant summary (count/mean/std/min/p50/p90/max).",
+    "why": "Lets you spot broken scales (e.g., revenue 1e9) or variant-specific weirdness quickly.",
+    "fix": "Use it to identify metrics needing normalization or outlier handling."
+  },
+
+  "ALLOCATION_NO_OVERLAP": {
+    "title": "Allocation variants do not match data",
+    "what": "Your --allocation specifies variant names that do not exist in the dataset.",
+    "why": "SRM check cannot run correctly if names don't match.",
+    "fix": "Use the exact variant names found in the data (after cleaning)."
+  },
+  "ALLOCATION_SUMMARY": {
+    "title": "Allocation / SRM summary",
+    "what": "Chi-square style summary comparing observed split to expected split.",
+    "why": "This detects Sample Ratio Mismatch (SRM), a critical experiment validity issue.",
+    "fix": "If suspicious, inspect assignment logic, filtering, and exposure join."
+  },
+  "ALLOCATION_SRM_FAIL": {
+    "title": "SRM detected (allocation mismatch)",
+    "what": "Observed variant split significantly differs from expected allocation.",
+    "why": "SRM often invalidates A/B tests because assignment or tracking is biased.",
+    "fix": "Stop analysis and debug: assignment, targeting, logging, and any filtering differences."
+  }
+}

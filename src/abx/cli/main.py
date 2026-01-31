@@ -1,5 +1,6 @@
 import argparse
 from abx.cli.convert_cmd import add_convert_subcommand
+from abx.cli.doctor_cmd import add_doctor_subcommand
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="ab", formatter_class=argparse.RawTextHelpFormatter)
@@ -9,6 +10,9 @@ def main() -> None:
 
     #Register: ab convert ...
     add_convert_subcommand(subparsers)
+    #Register: ab convert ...
+    add_doctor_subcommand(subparsers)
+
 
     args = parser.parse_args()
 
