@@ -1,6 +1,6 @@
-# Contributing to ab
+# Contributing to abx
 
-Thanks for your interest in contributing to **ab**! This document explains how to set up the project locally, how to propose changes, and the standards we follow.
+Thanks for your interest in contributing to **abx**! This document explains how to set up the project locally, how to propose changes, and the standards we follow.
 
 ---
 
@@ -48,6 +48,10 @@ abx/
 
   src/
     abx/
+      cli/
+        convert_cmd.py
+        doctor_cmd.py
+        main.py
       ...package code...
 ```
 
@@ -94,15 +98,24 @@ Once installed editable:
 
 ```bash
 ab --help
+abx --help
 ab convert --help
 ab convert unit --help
 ab convert events --help
+ab doctor --help
+
+Tip: print ready-to-copy Metric DSL examples:
+
+```bash
+ab convert unit --examples
+ab convert events --examples
+```
 ```
 
 If you don’t have a console script entrypoint yet, you can also run the module form (depending on packaging):
 
 ```bash
-python -m ab --help
+python -m abx --help
 ```
 
 ---
@@ -117,7 +130,7 @@ Before submitting changes, please run:
 - at least one value-based metric (`--value` + `sum_value`)
 - at least one exposure-anchored run (`--exposure` + `--window`)
 
-### Automated tests (recommended, if present)
+### Automated tests (recommended)
 If the repo includes `pytest` tests:
 
 ```bash
@@ -148,7 +161,33 @@ If changing CLI behavior:
 
 ---
 
+
+## Adding a new metric rule
+
+When extending the Metric DSL, aim to keep behavior consistent and easy to test.
+
+Where to implement:
+- Unit DSL rules live in `src/abx/cli/convert_cmd.py` under the unit conversion path.
+- Events DSL rules live in `src/abx/cli/convert_cmd.py` under the events aggregation path.
+
+What to add:
+1) **Parser support** (if new kwargs are introduced).
+2) **Implementation**: a clear groupby-per-user aggregation.
+3) **Docs**: update `docs/convert.md` (single source of truth).
+4) **Tests**: add a focused automated test (or at least a minimal manual repro command).
+
+Design guidelines:
+- Keep rule names explicit (e.g., `time_to_nth_event`, `unique_event_days`).
+- Prefer deterministic tie-breaking (`mode` should be stable).
+- Make exposure requirements explicit in errors.
+
+
 ## Documentation standards
+
+- `docs/convert.md` is the canonical reference for convert flags + Metric DSL.
+- Keep CLI help text and docs in sync (avoid drift).
+- If behavior changes, update the data contract: `docs/data-contract.md`.
+
 
 - Docs must match the actual behavior of the code.
 - `docs/convert.md` is the authoritative reference for CLI arguments and metric rules.

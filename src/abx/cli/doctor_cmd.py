@@ -2,7 +2,7 @@ import argparse
 import pandas as pd
 from pathlib import Path
 import json
-_FGUIDE_PATH = Path(__file__).with_name("finding_guide.txt")
+_FGUIDE_PATH = Path(__file__).with_name("FINDING_GUIDE.txt")
 
 
 def add_doctor_subcommand(subparsers: argparse._SubParsersAction) -> None:
@@ -10,17 +10,18 @@ def add_doctor_subcommand(subparsers: argparse._SubParsersAction) -> None:
     doctor_parser.add_argument("--data", metavar="PATH", default=None, help="| Path to converted CSV or Parquet file")
     doctor_parser.add_argument("--user", metavar="COL", default=None, help="| User/unit id column name in converted data (default: user_id)")
     doctor_parser.add_argument("--variant", metavar="COL", default=None, help="| Treatment/variant column name in converted data (default: variant)")
-    doctor_parser.add_argument("--metrics", metavar="COL,COL", default=None, help="| Comma-separated metric columns to check (default: all columns except user/variant)")
+    doctor_parser.add_argument("--metrics", metavar="COL,COL", default=None, help="| Comma-separated metric columns to check (default: numeric columns except user/variant)")
     doctor_parser.add_argument("--ignore", metavar="COL,COL", default=None, help="| Comma-separated columns to ignore (e.g., keep cols like device,country)")
     doctor_parser.add_argument("--allocation", metavar="SPEC", default=None, help="| Expected allocation: 'equal' or 'A=0.5,B=0.3,C=0.2' (optional)")
     doctor_parser.add_argument("--alpha", metavar="FLOAT", type=float, default=None, help="| Alpha for allocation/SRM-style checks (default: 0.01)")
     doctor_parser.add_argument("--min-n", metavar="N", type=int, default=None, help="| Warn if any variant has fewer than N users (optional)")
+    doctor_parser.add_argument("--min-n-metric", metavar="N", type=int, default=None, help="| Warn if any metric has < N non-missing users in any variant (optional)")
     doctor_parser.add_argument("--only", choices=["errors", "warnings", "all"], default=None, help="| What to report: errors, warnings, or all (default: all)")
     doctor_parser.add_argument("--fail-on", choices=["error", "warn"], default=None, help="| Exit nonzero on errors only (default) or errors+warnings")
     doctor_parser.add_argument("--no-exit", action="store_true", help="| Always exit 0 (still prints report)")
     doctor_parser.add_argument("--preview", action="store_true", help="| Preview problem rows/examples")
-    doctor_parser.add_argument("--report", metavar="PATH", default=None, help="| Write report to file (.md which is saved as .pdf) (optional)")
-    doctor_parser.add_argument("--check", metavar="NAME,NAME", default=None, help="| Comma-separated checks to run (e.g., integrity,variants,missingness,allocation,metrics,consistency)")
+    doctor_parser.add_argument("--report", metavar="PATH", default=None, help="| Write report to file (.md ot .json) (optional)")
+    doctor_parser.add_argument("--check", metavar="NAME,NAME", default=None, help="| Comma-separated checks to run ---(e.g., integrity,variants,missingness,allocation,metrics,consistency)")
     doctor_parser.add_argument("--skip", metavar="NAME,NAME", default=None, help="| Comma-separated checks to skip")
     doctor_parser.add_argument("--save-config", metavar="PATH", default=None, help="| Write merged arguments to a JSON config file (optional, should end in .json)")
     doctor_parser.add_argument("--config", metavar="PATH", default=None, help="| Load arguments from a JSON config file (optional, should end in .json)")
@@ -72,7 +73,7 @@ def _explain_finding(code: str) -> dict | None:
 def _format_diagnostics(meta: dict | None) -> str:
     if meta is None or not isinstance(meta, dict) or not meta:
         return ""
-    keys = ["metric", "min_n", "missing", "missing_rate", "worst_variant", "worst_rate", "best_variant", "best_rate", "gap_pp", "n_rows", "n_users",]
+    keys = ["metric", "min_n", "min_n_metric", "missing", "missing_rate", "worst_variant", "worst_rate", "best_variant", "best_rate", "gap_pp", "n_rows", "n_users",]
     lines = []
     for k in keys:
         if k not in meta:
@@ -80,7 +81,9 @@ def _format_diagnostics(meta: dict | None) -> str:
         v = meta.get(k)
 
         if isinstance(v, float):
-            if "rate" in k and 0.0 <= v <= 1.0:
+            if k == "gap_pp":
+                v = _fmt_pp(v)
+            elif "rate" in k and 0.0 <= v <= 1.0:
                 v = _fmt_pct(v)
             else:
                 v = f"{v:.4g}"
@@ -123,13 +126,19 @@ def _format_explain_text(code: str, meta: dict | None = None) -> str:
             br = meta.get("best_rate")
             gp = meta.get("gap_pp")
             if m is not None and wv is not None and wr is not None and bv is not None and br is not None and gp is not None:
-                lines.append(f"Example: '{m}' worst={wv}({_fmt_pct(wr)}), best={bv}({_fmt_pct(br)}), gap={gp}.")
+                lines.append(f"Example: '{m}' worst={wv}({_fmt_pct(wr)}), best={bv}({_fmt_pct(br)}), gap={_fmt_pp(gp)}.")
 
         if code == "VARIANT_TINY_ARM":
             mn = meta.get("min_n")
             note = meta.get("note")
             if mn is not None and note:
                 lines.append(f"Example: {note} (min_n={mn}).")
+
+        if code == "METRIC_TINY_ARM":
+            mmn = meta.get("min_n_metric")
+            note = meta.get("note")
+            if mmn is not None and note:
+                lines.append(f"Example: {note} (min_n_metric={mmn}).")
 
     likely = guide.get("likely", []) or []
     nxt = guide.get("next", []) or []
@@ -445,12 +454,14 @@ def _integrity(df: pd.DataFrame, user: str, variant:str, report_items: list[dict
     #Duplicate user_id rows
     dup_mask = df.duplicated(subset=[user], keep=False)
     if dup_mask.any():
+        dup_users = int(df.loc[dup_mask, user].nunique(dropna=True))
+        dup_rows = int(dup_mask.sum())
         _write_report(report_items, {
             "severity": "ERROR",
             "code": "INTEGRITY_DUP_USER",
-            "message": f"Duplicate '{user}' rows found. Canonical data must have exactly 1 row per user.",
-            "count": int(dup_mask.sum()),
-            "meta": {"n_rows": int(len(df)), "n_users": int(df[user].nunique(dropna=True))},
+            "message": f"Duplicate '{user}' rows found. Canonical data must have exactly 1 row per user. (dup_users={dup_users}, dup_rows={dup_rows})",
+            "count": dup_rows,
+            "meta": {"n_rows": int(len(df)), "n_users": int(df[user].nunique(dropna=True)), "dup_users": dup_users, "dup_rows": dup_rows},
             "examples_df": df.loc[dup_mask, [user, variant]].sort_values(user).copy(),
         }, max_rows=max_rows)
 
@@ -598,7 +609,7 @@ def _missingness(df: pd.DataFrame, user: str, variant: str, metrics: list[str], 
                     "worst_rate": worst_rate,
                     "best_variant": best_v,
                     "best_rate": best_rate,
-                    "gap_pp": _fmt_pp(gap),
+                    "gap_pp": gap,
                 },
                 "examples_df": per[[variant, "users", "missing", "missing_pct"]].copy(),
             }, max_rows=max_rows)
@@ -638,12 +649,8 @@ def _metrics_check(df: pd.DataFrame, user: str, variant: str, metrics: list[str]
         bad_cast = int(((~s0.isna()) & (s_num.isna())).sum())
         bad_cast_rate = (bad_cast / n_nonmissing) if n_nonmissing > 0 else 0.0
 
-        #Non-finite
-        nonfinite = 0
-        if s_num.notna().any():
-            nonfinite = int((~pd.Series(s_num).replace([float("inf"), float("-inf")], pd.NA).notna()).sum())
-        if s_num.notna().any():
-            nonfinite = int((s_num == float("inf")).sum() + (s_num == float("-inf")).sum())
+        #Non-finite (inf / -inf)
+        nonfinite = int(pd.Series(s_num).isin([float("inf"), float("-inf")]).sum())
 
         #Constant metric
         is_constant = False
@@ -677,7 +684,7 @@ def _metrics_check(df: pd.DataFrame, user: str, variant: str, metrics: list[str]
                 "examples_df": df[[user, variant, m]].head(30).copy() if preview else None,
             }, max_rows=max_rows)
 
-        #WARN/ERROR: too many values fail numeric casting
+        #WARN: too many values fail numeric casting
         if bad_cast_rate >= 0.20 and n_nonmissing > 0:
             _write_report(report_items, {
                 "severity": "WARN",
@@ -694,7 +701,7 @@ def _metrics_check(df: pd.DataFrame, user: str, variant: str, metrics: list[str]
                 "code": "METRIC_NONFINITE",
                 "message": f"Metric '{m}' contains inf/-inf values. That breaks most analysis.",
                 "count": nonfinite,
-                "examples_df": df.loc[(s_num == float("inf")) | (s_num == float("-inf")), [user, variant, m]].copy(),
+                "examples_df": df.loc[pd.Series(s_num).isin([float("inf"), float("-inf")]).values, [user, variant, m]].copy(),
             }, max_rows=max_rows)
 
         #WARN: constant metric
@@ -846,11 +853,59 @@ def _distribution(df: pd.DataFrame, user: str, variant: str, metrics: list[str],
         }, max_rows=max_rows)
 
 #---------------------
+def _metric_arm_n_check(df: pd.DataFrame, user: str, variant: str, metrics: list[str], min_n_metric: int, report_items: list[dict], max_rows: int = 30) -> None:
+    if min_n_metric is None or min_n_metric <= 0:
+        return
+
+    rows = []
+    for m in metrics:
+        tmp = df[[variant, m]].copy()
+        tmp["_ok"] = tmp[m].notna().astype(int)
+        per = tmp.groupby(variant, dropna=False)["_ok"].sum().reset_index()
+        per.columns = [variant, "n_nonmissing"]
+        per.insert(0, "metric", m)
+
+        if len(per) == 0:
+            continue
+
+        worst_idx = int(per["n_nonmissing"].idxmin())
+        worst_v = per.loc[worst_idx, variant]
+        worst_n = int(per.loc[worst_idx, "n_nonmissing"])
+
+        if worst_n < min_n_metric:
+            note = f"{m}: {worst_v} has {worst_n} non-missing users"
+            rows.append({"metric": m, "worst_variant": worst_v, "worst_n_nonmissing": worst_n, "min_n_metric": int(min_n_metric)})
+
+            _write_report(report_items, {
+                "severity": "WARN",
+                "code": "METRIC_TINY_ARM",
+                "message": f"Metric '{m}' has too few non-missing users in some variants (min_n_metric={min_n_metric}). This can make results unstable or impossible to compute.",
+                "count": int(len(per)),
+                "meta": {"metric": m, "min_n_metric": int(min_n_metric), "note": note},
+                "examples_df": per,
+            }, max_rows=max_rows)
+
+    if rows:
+        out = pd.DataFrame(rows).sort_values(["worst_n_nonmissing"])
+        _write_report(report_items, {
+            "severity": "INFO",
+            "code": "METRIC_TINY_ARM_SUMMARY",
+            "message": "Metrics with small per-variant non-missing sample sizes.",
+            "count": int(len(out)),
+            "meta": {"min_n_metric": int(min_n_metric)},
+            "examples_df": out,
+        }, max_rows=max_rows)
+
+#---------------------
 def _allocation_check(df: pd.DataFrame, user: str, variant: str, allocation: str, alpha: float, report_items: list[dict], max_rows: int = 30) -> None:
     if allocation is None:
         return
 
     v = df[variant].astype("string").str.strip().str.lower()
+    v = v.mask(v.isna() | (v == ""), pd.NA).dropna()
+    if v.empty:
+        return
+
     counts = v.value_counts(dropna=False).reset_index()
     counts.columns = [variant, "n_users"]
 
@@ -860,7 +915,6 @@ def _allocation_check(df: pd.DataFrame, user: str, variant: str, allocation: str
 
     exp = {}
     if alloc == "equal":
-        #ignore missing variant bucket if it exists
         real_vars = [x for x in variants if x is not None and str(x).strip() != "" and str(x).lower() != "nan"]
         if not real_vars:
             return
@@ -978,8 +1032,6 @@ def _run_doctor(args: argparse.Namespace) -> None:
     out_path = Path(args.report) if args.report is not None else None
     
     #Secondary defaults
-    if args.metrics is None:
-        args.metrics = list(df.loc[:, ~df.columns.isin([args.user,args.variant])].columns)
     if args.alpha is None:
         args.alpha = 0.01
     if args.only is None:
@@ -987,7 +1039,13 @@ def _run_doctor(args: argparse.Namespace) -> None:
     if args.fail_on is None:
         args.fail_on = "error"
     if args.check is None:
-        args.check = "integrity,variants,missingness,metrics,consistency,distribution,allocation"
+        args.check = "integrity,variants,missingness,metrics,consistency,distribution,metric_arm_n,allocation"
+
+    #Default metrics: numeric columns only (so segments like country/device don't spam)
+    if args.metrics is None:
+        cand = [c for c in df.columns if c not in [args.user, args.variant]]
+        args.metrics = [c for c in cand if pd.api.types.is_numeric_dtype(df[c])]
+
     if args.save_config:
         _save_config(args, Path(args.save_config))
         print(f"[config] saved: {args.save_config}")
@@ -1034,6 +1092,9 @@ def _run_doctor(args: argparse.Namespace) -> None:
     if "distribution" in what_to_check:
         _distribution(df, args.user, args.variant, args.metrics, report_items, max_rows=30)
 
+    if "metric_arm_n" in what_to_check:
+        _metric_arm_n_check(df, args.user, args.variant, args.metrics, args.min_n_metric, report_items, max_rows=30)
+
     if "allocation" in what_to_check:
         _allocation_check(df, args.user, args.variant, args.allocation, args.alpha, report_items, max_rows=30)
 
@@ -1044,3 +1105,17 @@ def _run_doctor(args: argparse.Namespace) -> None:
         print(f"Report saved in {out_path}")
     if args.preview:
         _print_preview(report_items, only=args.only, max_example_rows=10)
+
+    n_err = sum(1 for x in report_items if x.get("severity") == "ERROR")
+    n_wrn = sum(1 for x in report_items if x.get("severity") == "WARN")
+
+    exit_code = 0
+    no_exit = getattr(args, "no_exit", False)
+    fail_on = getattr(args, "fail_on", "error")
+    if not no_exit:
+        if fail_on == "warn" and (n_err > 0 or n_wrn > 0):
+            exit_code = 2
+        elif fail_on == "error" and n_err > 0:
+            exit_code = 2
+    if exit_code != 0:
+        raise SystemExit(exit_code)

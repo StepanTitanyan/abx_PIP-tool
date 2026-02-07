@@ -103,7 +103,7 @@ Use this to catch:
 
 ### metrics
 
-Metric-type sanity checks (best-effort):
+Metric-type sanity checks:
 
 - binary-like columns should look like 0/1
 - count-like columns should be non-negative integers
@@ -111,6 +111,13 @@ Metric-type sanity checks (best-effort):
 - time columns should parse / have reasonable values
 
 Doctor cannot infer your *intent* perfectly; it flags suspicious patterns and shows examples.
+
+### metric-variant sample size
+
+Checks **minimum sample size per variant** (arm) for each metric.
+
+- Uses `--min-n` (global) and/or `--min-n-metric` (per-metric overrides).
+- Flags `WARN`/`ERROR` when any arm is too small to trust inference.
 
 ### consistency
 
@@ -162,6 +169,7 @@ Important notes:
 - `--data PATH` — converted `.csv` or `.parquet`
 
 ### Common options
+- `--min-n-metric METRIC=N[,METRIC=N...]` — per-metric minimum arm size overrides (e.g., `revenue=200,signup=500`).
 
 - `--user COL` — user column name (default: `user_id`)
 - `--variant COL` — variant column name (default: `variant`)

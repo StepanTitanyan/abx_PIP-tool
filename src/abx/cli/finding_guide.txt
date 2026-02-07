@@ -23,7 +23,6 @@
     "why": "Quick sanity check that the file has expected number of rows/users.",
     "fix": "None needed; use it to confirm input/output look reasonable."
   },
-
   "VARIANT_COUNTS": {
     "title": "Variant counts",
     "what": "Number of users per variant.",
@@ -42,7 +41,6 @@
     "why": "Small arms lead to unstable results and low statistical power.",
     "fix": "Collect more data, adjust experiment allocation, or remove tiny arms if they are accidental."
   },
-
   "METRIC_ALL_MISSING": {
     "title": "Metric is all missing",
     "what": "A metric column is entirely NaN (no values).",
@@ -67,7 +65,6 @@
     "why": "Lets you quickly see which metrics are broken or biased.",
     "fix": "Use it to decide where to debug first."
   },
-
   "METRIC_NON_NUMERIC_DTYPE": {
     "title": "Metric is non-numeric dtype",
     "what": "Metric column is stored as object/string instead of numeric.",
@@ -104,7 +101,6 @@
     "why": "Helps you quickly identify broken metric columns.",
     "fix": "Use it to debug the highest-risk metrics first."
   },
-
   "VARIANT_NEEDS_CLEANING": {
     "title": "Variant needs normalization",
     "what": "Variant values differ by whitespace/case (e.g., 'A', ' a ', 'A ').",
@@ -129,7 +125,6 @@
     "why": "Two ids that look same can group differently ('u1' vs ' u1 ').",
     "fix": "Normalize user ids in convert: astype('string').str.strip()."
   },
-
   "METRIC_OUTLIERS": {
     "title": "Metric has outliers",
     "what": "Metric has extreme values based on IQR rule.",
@@ -142,7 +137,6 @@
     "why": "Lets you spot broken scales (e.g., revenue 1e9) or variant-specific weirdness quickly.",
     "fix": "Use it to identify metrics needing normalization or outlier handling."
   },
-
   "ALLOCATION_NO_OVERLAP": {
     "title": "Allocation variants do not match data",
     "what": "Your --allocation specifies variant names that do not exist in the dataset.",
@@ -160,5 +154,36 @@
     "what": "Observed variant split significantly differs from expected allocation.",
     "why": "SRM often invalidates A/B tests because assignment or tracking is biased.",
     "fix": "Stop analysis and debug: assignment, targeting, logging, and any filtering differences."
+  },
+  "METRIC_NEGATIVE_VALUES": {
+    "title": "Negative values detected",
+    "what": "A metric column contains negative numbers.",
+    "why": "Many A/B metrics are naturally non‑negative (counts, revenue, time deltas). Negative values often mean parsing bugs, refunds mixed into revenue, or a sign/units issue.",
+    "fix": "Confirm whether negatives are valid for this metric. If not: fix parsing in convert, clamp at 0 where appropriate, or separate refunds/adjustments into their own metric.",
+    "likely": [
+      "Refunds/chargebacks included in revenue-like metric",
+      "Parsing bug (e.g., '-' kept from strings like '—' or 'N/A')",
+      "Units/sign mistake (delta computed in wrong direction)"
+    ],
+    "next": [
+      "Inspect the example rows (largest magnitude negatives)",
+      "Decide if negatives are valid; if not, fix conversion upstream",
+      "Re-run doctor after fixing"
+    ]
+  },
+  "METRIC_TIME_NOT_DATETIME": {
+    "title": "Time-like metric is not datetime",
+    "what": "A column looks like timestamps/dates but is not parsed as datetime.",
+    "why": "Time metrics should be datetime so later analysis can compute deltas/windows correctly. Keeping them as strings can silently break downstream logic.",
+    "fix": "Parse the column with pd.to_datetime in convert (or pre-clean). Ensure timezone/format is consistent.",
+    "likely": [
+      "Mixed timestamp formats in the column",
+      "Timezone suffix or text noise in some rows",
+      "Column contains non-time strings like 'unknown'"
+    ],
+    "next": [
+      "Try parsing with pd.to_datetime(errors='coerce') and measure parse rate",
+      "Fix upstream formatting and re-run doctor"
+    ]
   }
 }

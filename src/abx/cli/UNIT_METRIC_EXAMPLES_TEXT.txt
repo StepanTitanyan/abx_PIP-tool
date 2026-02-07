@@ -1,0 +1,124 @@
+## Metric DSL (unit)
+
+Syntax:
+```
+NAME=TYPE:fix(COL[, key=value ...])
+```
+
+Notes:
+- TYPE is one of: `binary | continuous | count | string`
+- Unit mode currently supports **only** `fix(...)`
+- `COL` is the source column in the input file
+- `key=value` kwargs are comma-separated (no spaces required)
+- Output always includes canonical columns: `user_id`, `variant`, plus metric columns
+- Source metric columns are dropped unless included in `--keep`
+
+Types and rules:
+
+### binary
+```
+binary:fix(col)
+```
+- Converts truthy/falsy into Int64 0/1.
+- Truthy: `1,true,t,yes,y`
+- Falsy:  `0,false,f,no,n`
+- Also accepts numeric 0/1 already present.
+
+### continuous
+```
+continuous:fix(col)
+```
+- Attempts numeric parse after stripping non-numeric characters (keeps digits, dot, minus).
+- Output is float (NaN allowed).
+
+### count
+```
+count:fix(col)
+```
+- Parses numeric similarly to continuous, then enforces integer-like values.
+- If any non-integer values exist (e.g. 2.5), conversion stops with an error.
+- Output is Int64 (NA allowed).
+
+### string
+```
+string:fix(col[, lower=0|1, spaces=underscore|dash|space, collapse=0|1,
+              strip_separators=0|1, dropchars=auto|CHARS, empty_to_na=0|1 ])
+```
+
+Default behavior (if kwargs not given):
+- `lower=1`
+- `spaces=underscore`
+- `collapse=1`
+- `strip_separators=1`
+- `dropchars=""` (no dropping unless specified)
+- `empty_to_na=1`
+
+Kwargs meaning:
+- `lower=1` → lowercase values
+- `spaces=underscore|dash|space`
+  - `underscore`: spaces/hyphens → `_`
+  - `dash`: spaces/underscores → `-`
+  - `space`: underscores/hyphens → single spaces
+- `collapse=1` → collapse repeated separators (`__` → `_`, `---` → `-`, repeated spaces → single space)
+- `strip_separators=1` → strip leading/trailing separators (`_`/`-`) or whitespace (for `space`)
+- `dropchars=auto` → replaces common punctuation with spaces before normalization  
+  (default set: `/\|:;,.`)
+- `dropchars=CHARS` → specify exact characters to replace with spaces (commas not allowed)
+- `empty_to_na=1` → turns empty outputs into NA (also `_`/`-` alone become NA)
+
+---
+
+## Examples (minimal)
+
+### 1) Legacy single-metric mode (`--outcome`)
+```
+ab convert unit --data users.csv --user user --variant variant --outcome outcome --preview
+```
+
+### 2) Binary + Continuous + Count (multi-metric DSL)
+```
+ab convert unit --data users.csv --user user --variant variant \
+  --metric converted=binary:fix(is_converted) \
+  --metric revenue=continuous:fix(revenue_usd) \
+  --metric sessions=count:fix(session_count) \
+  --preview
+```
+
+### 3) Keep original source columns
+```
+ab convert unit --data users.csv --user user --variant variant \
+  --metric revenue=continuous:fix(revenue) \
+  --keep revenue \
+  --preview
+```
+
+### 4) Clean messy category strings (default standardization)
+```
+ab convert unit --data users.csv --user user --variant variant \
+  --metric channel=string:fix(marketing_channel) \
+  --metric country=string:fix(country) \
+  --preview
+```
+
+### 5) String cleaning with options
+```
+# Keep spaces (collapse whitespace), preserve case, drop punctuation automatically
+ab convert unit --data users.csv --user user --variant variant \
+  --metric campaign=string:fix(campaign_name,lower=0,spaces=space,dropchars=auto) \
+  --preview
+```
+
+### 6) String cleaning to dashed values
+```
+ab convert unit --data users.csv --user user --variant variant \
+  --metric device=string:fix(device_type,spaces=dash,collapse=1,strip_separators=1) \
+  --preview
+```
+
+### 7) Dedupe duplicates per user
+```
+ab convert unit --data users.csv --user user --variant variant \
+  --metric revenue=continuous:fix(rev) \
+  --dedupe last \
+  --preview
+```

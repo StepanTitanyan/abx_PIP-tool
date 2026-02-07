@@ -59,10 +59,14 @@ You must provide:
 
 - `--user COL` (user identifier)
 - `--variant COL` (treatment/variant label)
-- `--outcome COL` (outcome column)
+- **one of**:
+  - `--outcome COL` (legacy single outcome column), **or**
+  - one or more `--metric SPEC` (metric DSL; repeatable)
 
 Optionally:
 - `--keep COL,COL,...` (extra columns to keep)
+- `--segment COL` (segment columns; repeatable)
+
 
 All columns referenced by these flags must exist in the input dataset.
 
@@ -71,16 +75,25 @@ All columns referenced by these flags must exist in the input dataset.
 - **Variant column**: should be a categorical label. It will be coerced to string.
 - **Outcome column**: can be numeric or categorical depending on your use case. `ab` currently copies it as-is after string cleaning logic in the implementation (see note below).
 
-> Note: The current implementation lowercases the `outcome` column in `convert unit` by converting to string and applying `.str.lower()`.
-> For many A/B datasets, outcomes are numeric. If your outcomes are numeric, you should ensure they remain numeric (or adjust implementation).
-> This document reflects the *intended* contract; if code behavior differs, treat code as source of truth.
+> Note: In legacy `--outcome` mode, `ab` attempts to coerce the outcome to a sensible type based on context and does **not** intentionally lowercase numeric outcomes. In DSL mode, each metric is typed/cleaned by its spec.
 
 ### Cleaning guarantees (unit)
 - `user_id` output is always string-like (pandas `string`) and whitespace-trimmed.
 - `variant` output is always string-like, whitespace-trimmed, and lowercased.
-- Output columns are renamed to canonical names:
-  - `user_id`, `variant`, `outcome`
+- Canonical output columns always include `user_id` and `variant`.
+- Legacy mode (`--outcome`): output includes `outcome`.
+- DSL mode (`--metric`): output includes one column per metric spec (typed/cleaned).
+- Segment columns (`--segment`) are carried through after being resolved per-user (see below).
 - `--keep` columns are preserved and included unmodified.
+
+
+### Segment stability contract (unit)
+If you include `--segment COL` (repeatable), segments must be stable per user (e.g., `country`, `device`).
+
+- If a user has multiple non-null values for a segment column, `--segment-rule {error,first,last,mode}` controls resolution.
+- If `--segment-fix` is enabled, segment strings are standardized (e.g., lowercasing, whitespace normalization) **before** stability resolution.
+
+**Guarantee:** after conversion finishes successfully, each output user row has **at most one value** per segment column.
 
 ### Duplicates contract (unit)
 - If multiple rows exist per user:
@@ -103,7 +116,11 @@ You must provide:
 - at least one `--metric SPEC`
 
 Optionally:
-- `--value COL`
+- `--value COL` (default value column for value-based metrics)
+- `--segment COL` (segment columns; repeatable)
+- `--exposure VALUE` (event label identifying exposure/assignment moment)
+- `--window DURATION` (time window after exposure; requires `--exposure`)
+- `--unassigned {error,drop,keep}` (events only: what to do if a user ends up with an empty variant after cleaning)
 
 All referenced columns must exist in input data.
 
@@ -141,6 +158,15 @@ This normalization ensures:
 
 **Guarantee:** all event rows used for metrics have valid UTC timestamps.
 
+#### Segments (`--segment`, optional)
+If provided:
+- segment columns are carried through to the output
+- segment values are standardized when `--segment-fix` is enabled
+- if a segment is inconsistent per user, `--segment-rule {error,first,last,mode,from_exposure}` controls resolution
+  - `from_exposure` requires `--exposure` and takes segment values from the exposure row
+
+**Guarantee:** each output user row has at most one resolved value per segment column.
+
 #### Value (`--value`, optional)
 If provided:
 - coerced to string and trimmed
@@ -149,6 +175,10 @@ If provided:
 - invalid values become `NaN`
 
 **Guarantee:** output of value-based metrics is numeric float.
+
+Per-metric overrides:
+- In the events Metric DSL, rules that use values accept `value=COL` to override `--value` **for that metric only**.
+- All referenced value columns are required and cleaned once before aggregation.
 **Non-guarantee:** if your input contains non-numeric garbage, those rows may contribute `NaN` and affect aggregates. Validate separately if needed.
 
 ---

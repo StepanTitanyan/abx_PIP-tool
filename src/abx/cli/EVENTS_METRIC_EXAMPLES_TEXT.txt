@@ -1,0 +1,69 @@
+Metric DSL (events)
+
+Syntax:
+  NAME=TYPE:RULE(EVENT[, key=value ...])
+
+Notes:
+  - TYPE is one of: binary | count | continuous | time
+  - RULE depends on TYPE (see below)
+  - EVENT is matched against the event-type column (lowercased/trimmed by convert)
+  - key=value kwargs are comma-separated (no spaces required)
+  - For continuous value-based rules: value=COL overrides --value for that metric
+
+Types and rules:
+
+binary:
+  event_exists(event)
+    -> 1 if user has >=1 matching event, else 0
+  event_count_ge(event, n=2)
+    -> 1 if user has >= n matching events, else 0
+
+count:
+  count_event(event)
+    -> integer count of matching events per user
+  unique_event_days(event)
+    -> integer number of distinct UTC days with a matching event per user
+
+continuous:
+  sum_value(event, value=COL)
+    -> sum of value column across matching events; users with no events get 0
+  mean_value(event, value=COL)
+    -> mean of value column across matching events; users with no events stay NA
+  median_value(event, value=COL)
+    -> median of value column across matching events; users with no events stay NA
+  max_value(event, value=COL)
+    -> max of value column across matching events; users with no events stay NA
+  last_value(event, value=COL)
+    -> value from the last matching event by timestamp; users with no events stay NA
+
+time:
+  first_time(event)
+    -> timestamp (UTC) of first matching event per user
+  last_time(event)
+    -> timestamp (UTC) of last matching event per user
+  time_to_event(event, unit=s|m|h|d)
+    -> (first_time(event) - exposure_time) in chosen unit; requires --exposure
+  time_to_nth_event(event, n=2, unit=s|m|h|d)
+    -> (nth_time(event) - exposure_time) in chosen unit; requires --exposure
+
+Examples (minimal):
+
+  # Binary conversion
+  ab convert events --data events.csv --user user --variant variant --time ts --event event \
+    --metric conversion=binary:event_exists(purchase) --preview
+
+  # Count + unique days
+  ab convert events --data events.csv --user user --variant variant --time ts --event event \
+    --metric purchases=count:count_event(purchase) \
+    --metric purchase_days=count:unique_event_days(purchase) --preview
+
+  # Continuous with per-metric value column
+  ab convert events --data events.csv --user user --variant variant --time ts --event event \
+    --metric revenue=continuous:sum_value(purchase,value=amount) \
+    --metric max_rev=continuous:max_value(purchase,value=amount) --preview
+
+  # Time-to-event (requires exposure)
+  ab convert events --data events.csv --user user --variant variant --time ts --event event \
+    --exposure exposure --window 7d \
+    --metric tconv=time:time_to_event(purchase,unit=h) \
+    --metric t2=time:time_to_nth_event(purchase,n=2,unit=h) --preview

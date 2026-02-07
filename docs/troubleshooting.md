@@ -70,6 +70,9 @@ ab convert events `
 ```
 
 ### Quoting metric specs in `--metric`
+
+Tip: both `ab convert unit --examples` and `ab convert events --examples` print ready-to-copy specs that are already formatted safely.
+
 In PowerShell, unquoted strings containing parentheses can be parsed in surprising ways. In some cases an unquoted metric like:
 
 `--metric conversion=binary:event_exists(purchase)`
@@ -206,6 +209,13 @@ Recommendation:
 
 ## Variant/exposure logic errors
 
+### “Some users have empty variants after cleaning”
+If a user’s variant becomes empty after `.strip().lower()`, events conversion uses `--unassigned`:
+- `--unassigned error`: stop (strict)
+- `--unassigned drop`: drop those users
+- `--unassigned keep`: keep them and set `variant="unassigned"`
+
+
 ### “Multiple variants per user exist...”
 Your event log contains users with more than one variant value.
 
@@ -238,6 +248,29 @@ Fix:
 
 ---
 
+
+## Segments pitfalls
+
+### “Segment column is not stable for a user”
+**Symptom:** conversion stops complaining that a segment (e.g., `country`) has multiple values for the same `user_id`.
+
+**Fix options:**
+- Standardize strings first: add `--segment-fix` and one or more `--segment-fix-opt` (e.g., `lower=1`, `spaces=underscore`).
+- Decide how to resolve conflicts: set `--segment-rule`:
+  - `error` (default): fail fast
+  - `first` / `last`: choose by row order
+  - `mode`: most frequent value
+  - events only: `from_exposure` (requires `--exposure`) to take the segment value from the exposure row
+
+Example:
+```bash
+ab convert events ... \
+  --segment country --segment device \
+  --segment-fix --segment-fix-opt lower=1 \
+  --segment-rule from_exposure --exposure exposure --window 7d
+```
+
+
 ## Metric DSL errors
 
 ### “Bad --metric spec” / “expected RULE(...)”
@@ -260,6 +293,11 @@ Each metric name becomes an output column, so names must be unique.
 Fix:
 - rename the metric output column:
   - `revenue_7d=continuous:sum_value(purchase)`
+
+### “Unsupported metric...”
+If you’re using a newer rule (e.g., `unique_event_days`, `median_value`, `last_value`, `event_count_ge`, `time_to_nth_event`), make sure you’re running the updated version of `abx`.
+
+See `docs/convert.md` for the authoritative list of supported rules.
 
 ### “Unsupported metric...”
 Only the documented metric rules are supported.

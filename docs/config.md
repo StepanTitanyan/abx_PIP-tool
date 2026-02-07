@@ -173,3 +173,40 @@ After loading config, conversion still validates:
 - Full conversion + metric DSL reference: [`convert.md`](convert.md)
 - Data contract: [`data-contract.md`](data-contract.md)
 - Troubleshooting: [`troubleshooting.md`](troubleshooting.md)
+
+
+## Repeatable / list flags (metrics, segments)
+
+Some CLI options are **repeatable** (you can pass them multiple times). In configs, these appear as JSON arrays.
+
+Common ones:
+
+- `metric`: list of metric specs (e.g., `["rev=continuous:fix(revenue)", "buy=binary:fix(purchase)"]`)
+- `segment`: list of segment columns (e.g., `["country", "device"]`)
+- `segment_fix_opt`: list of `KEY=VAL` strings (e.g., `["lower=1", "spaces=underscore"]`)
+
+Doctor also has list-like options:
+
+- `metrics`: either a comma-separated string or an array of metric column names
+- `check` / `skip`: comma-separated strings of check names
+
+> Note: boolean flags that default to `False` (like `preview` or `segment_fix`) are **not** enabled by config loading, because configs only fill values that are currently `None`. Pass those flags explicitly on the CLI when you want them.
+
+
+
+## Examples
+
+### Doctor config example (per-metric minimum arm size)
+
+```json
+{
+  "data": "out/converted.csv",
+  "user": "user_id",
+  "variant": "variant",
+  "check": "integrity,variants,missingness,metrics,metric_arm_n,allocation",
+  "min_n": 200,
+  "min_n_metric": "revenue=500,signup=300",
+  "fail_on": "warn",
+  "report": "reports/doctor.md"
+}
+```
